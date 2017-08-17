@@ -54,9 +54,10 @@ class SequentialExecutor():
             ui.error(self.actor.description, "failed")
             for item, error in self.errors:
                 item_desc = self.actor.display_item(item)
-                ui.info(ui.green, "*", " ",
-                        ui.reset, ui.bold, item_desc, ": ",
-                        ui.reset, error, sep="")
+                message = [ui.green, "*", " ", ui.reset, ui.bold, item_desc]
+                if error.message:
+                    message.extend([ui.reset, ":", error.message])
+                ui.info(*message, sep="")
             raise ExecutorFailed()
 
         return True
