@@ -31,7 +31,7 @@ def test_sync_with_errors(tsrc_cli, git_server, workspace_path, messages):
 
     tsrc_cli.run("sync", expect_fail=True)
 
-    assert messages.find("Sync failed")
+    assert messages.find("Synchronize workspace failed")
     assert messages.find("\* foo/bar")
 
 
@@ -143,7 +143,6 @@ def test_fixed_ref_are_not_updated(tsrc_cli, git_server, workspace_path):
 
 
 def test_fixed_ref_are_updated_when_clean(tsrc_cli, git_server, workspace_path):
-
     git_server.add_repo("foo")
     git_server.tag("foo", "v0.1")
     git_server.manifest.set_repo_ref("foo", "v0.1")

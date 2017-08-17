@@ -61,7 +61,7 @@ def display_statuses(statuses, errors):
 
 def main(args):
     workspace = tsrc.cli.get_workspace(args)
-    manifest = workspace.load_manifest()
-    repos = manifest.repos
+    workspace.load_manifest()
+    repos = workspace.manifest.repos
     statuses, errors = collect_statuses(workspace, repos)
     display_statuses(statuses, errors)
