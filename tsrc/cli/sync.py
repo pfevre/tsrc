@@ -8,7 +8,8 @@ import tsrc.cli
 
 
 class RepoSyncer:
-    def __init__(self, workspace):
+    def __init__(self, workspace, args):
+        self.args = args
         self.workspace = workspace
         self.manifest = None
         self.bad_branches = list()
@@ -36,7 +37,21 @@ class RepoSyncer:
         if repo.fixed_ref:
             self.sync_repo_to_ref(repo, repo_path)
         else:
-            self.sync_repo_to_branch(repo, repo_path)
+            if self.args.force:
+                self.sync_repo_to_branch_force(repo, repo_path)
+            else:
+                self.sync_repo_to_branch(repo, repo_path)
+
+    def sync_repo_to_branch_force(self, repo, repo_path):
+        current_branch = None
+        try:
+            current_branch = tsrc.git.get_current_branch(repo_path)
+            if current_branch and current_branch != repo.branch:
+                ui.info("Changing to manifest branch", ui.bold)
+                tsrc.git.run_git(repo_path, "checkout", repo.branch)
+        except tsrc.Error:
+            self.errors.append((repo.src, "updating branch failed"))
+
 
     def sync_repo_to_branch(self, repo, repo_path):
         current_branch = None
@@ -87,7 +102,7 @@ class RepoSyncer:
 
 def main(args):
     workspace = tsrc.cli.get_workspace(args)
-    repo_syncer = RepoSyncer(workspace)
+    repo_syncer = RepoSyncer(workspace, args)
     ok = repo_syncer.execute()
     if ok:
         ui.info("Done", ui.check)

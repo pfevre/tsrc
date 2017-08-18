@@ -120,7 +120,8 @@ def main(args=None):
     message_group.add_argument("--ready", action="store_true", help="Mark merge request as ready")
     push_parser.add_argument("-a", "--assignee", dest="assignee")
     workspace_subparser(subparsers, "status")
-    workspace_subparser(subparsers, "sync")
+    sync_parser = workspace_subparser(subparsers, "sync")
+    sync_parser.add_argument("-f", "--force", action="store_true", default=False)
 
     args = parser.parse_args(args=args)
     if args.verbose:
