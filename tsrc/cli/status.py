@@ -12,6 +12,7 @@ class Status:
     src = attr.ib()
     branch = attr.ib()
     dirty = attr.ib()
+    repo_branch = attr.ib()
 
 
 def collect_statuses(workspace, repos):
@@ -34,7 +35,7 @@ def collect_statuses(workspace, repos):
 
         dirty = tsrc.git.is_dirty(full_path)
 
-        result.append(Status(src=repo.src, branch=branch, dirty=dirty))
+        result.append(Status(src=repo.src, branch=branch, repo_branch=repo.branch, dirty=dirty))
 
     ui.info("")
     return result, errors
@@ -45,8 +46,13 @@ def display_statuses(statuses, errors):
         return
     max_src = max((len(x.src) for x in statuses))
     for status in statuses:
-        message = (ui.green, "*", ui.reset, ui.bold, status.src.ljust(max_src),
-                   ui.reset, ui.green, status.branch)
+        if status.repo_branch != status.branch:
+            message = (ui.fuscia, "*", ui.reset, ui.bold, status.src.ljust(max_src),
+                       ui.reset, ui.fuscia, status.branch,
+                       ui.reset, "Should be on ", ui.bold, ui.darkgreen, status.repo_branch)
+        else:
+            message = (ui.green, "*", ui.reset, ui.bold, status.src.ljust(max_src),
+                       ui.reset, ui.green, status.branch)
         if status.dirty:
             message = message + (ui.reset, ui.brown, "(dirty)")
         ui.info(*message)
