@@ -11,11 +11,11 @@ def get_long_description():
 
 
 setup(name="tsrc",
-      version="0.2.1",
+      version="0.2.2",
       description="Manage multiple repositories",
       long_description=get_long_description(),
-      url="https://github.com/TankerApp/tsrc",
-      author="Kontrol SAS",
+      url="https://github.com/pfevre/tsrc",
+      author="Pierre Fevre",
       packages=find_packages(),
       include_package_data=True,
       install_requires=[
