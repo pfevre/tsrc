@@ -47,7 +47,8 @@ class RepoSyncer:
         try:
             current_branch = tsrc.git.get_current_branch(repo_path)
             if current_branch and current_branch != repo.branch:
-                ui.info("Changing to manifest branch", ui.bold)
+                ui.info(ui.reset, ui.yellow, "Changing to manifest branch:",
+                        ui.reset, ui.bold, ui.darkgreen, repo.branch)
                 tsrc.git.run_git(repo_path, "checkout", repo.branch)
         except tsrc.Error:
             self.errors.append((repo.src, "updating branch failed"))
