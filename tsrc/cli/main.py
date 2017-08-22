@@ -104,6 +104,8 @@ def main(args=None):
     init_parser.add_argument("manifest_url")
     init_parser.add_argument("-b", "--branch")
     init_parser.set_defaults(branch="master")
+    init_parser.add_argument("-m", "--manifest")
+    init_parser.set_defaults(manifest="manifest.yml")
 
     log_parser = workspace_subparser(subparsers, "log")
     log_parser.add_argument("--from", required=True, dest="from_", metavar="FROM")
