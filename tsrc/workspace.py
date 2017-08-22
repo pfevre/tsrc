@@ -17,12 +17,13 @@ class Workspace():
         self.root_path = root_path
         hidden_path = self.joinpath(".tsrc")
         self.manifest_clone_path = hidden_path.joinpath("manifest")
+        self.manifest_info_path = hidden_path.joinpath("manifest.txt")
 
     def joinpath(self, *parts):
         return self.root_path.joinpath(*parts)
 
     def load_manifest(self):
-        manifest_yml_path = self.manifest_clone_path.joinpath("manifest.yml")
+        manifest_yml_path = self.manifest_clone_path.joinpath(self.manifest_info_path.text())
         if not manifest_yml_path.exists():
             message = "No manifest found in {}. Did you run `tsrc init` ?"
             raise tsrc.Error(message.format(manifest_yml_path))
@@ -40,7 +41,7 @@ class Workspace():
             raise tsrc.Error("Missing 'url' in gitlab configuration")
         return res
 
-    def init_manifest(self, manifest_url, *, branch="master", tag=None):
+    def init_manifest(self, manifest_url, *, branch="master", tag=None, manifest):
         if self.manifest_clone_path.exists():
             ui.warning("Re-initializing worktree")
             tsrc.git.run_git(self.manifest_clone_path,
@@ -65,6 +66,7 @@ class Workspace():
             if tag:
                 tsrc.git.run_git(self.manifest_clone_path, "reset",
                                  "--hard", tag)
+        self.manifest_info_path.write_text(manifest, append=False)
 
         return self.load_manifest()
 
