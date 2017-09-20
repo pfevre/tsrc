@@ -7,9 +7,9 @@ import sys
 import textwrap
 
 import colored_traceback
+import ui
 
 import tsrc
-from tsrc import ui
 
 
 def fix_cmd_args_for_foreach(args, foreach_parser):
@@ -61,28 +61,25 @@ def main_wrapper(main_func):
             main_func(args=args)
         except tsrc.Error as e:
             # "expected" failure, display it and exit
-            ui.error(e)
+            if e.message:
+                ui.error(e.message)
             sys.exit(1)
-        except SystemExit as e:
-            # `ui.fatal()` or `sys.exit()` has been called,
-            # assume message has already been displayed and
-            # exit accordingly
-            sys.exit(e.code)
         except KeyboardInterrupt:
             ui.warning("Interrupted by user, quitting")
             sys.exit(1)
-        except Exception as e:
-            # This is a bug: raise so that colored_traceback prints
-            # an helpful backtrace
-            raise
     return wrapped
 
 
 @main_wrapper
 def main(args=None):
     parser = argparse.ArgumentParser()
+
     parser.add_argument("--verbose", help="Show debug messages",
                         action="store_true")
+    parser.add_argument("-q", "--quiet", help="Only display warnings and errors",
+                        action="store_true")
+    parser.add_argument("--color", choices=["auto", "always", "never"])
+
     subparsers = parser.add_subparsers(title="subcommands", dest="command")
 
     subparsers.add_parser("version")
@@ -123,8 +120,8 @@ def main(args=None):
     workspace_subparser(subparsers, "sync")
 
     args = parser.parse_args(args=args)
-    if args.verbose:
-        ui.CONFIG["verbose"] = True
+    ui.setup(verbose=args.verbose, quiet=args.quiet, color=args.color)
+
     command = args.command
     if not command:
         parser.print_help()

@@ -3,22 +3,30 @@
 import urllib.parse
 
 import requests
+import ui
 
 import tsrc
-from tsrc import ui
 
-GITLAB_URL = "http://10.100.0.1:8000"
 GITLAB_API_VERSION = "v4"
 
 
 class GitLabError(tsrc.Error):
-    def __init__(self, status_code, message):
+    pass
+
+
+class GitLabAPIError(GitLabError):
+    def __init__(self, url, status_code, message):
         super().__init__(message)
+        self.url = url
         self.status_code = status_code
         self.message = message
 
     def __str__(self):
         return "%s - %s" % (self.status_code, self.message)
+
+
+class TooManyUsers(GitLabError):
+    pass
 
 
 def handle_errors(response, stream=False):
@@ -38,18 +46,19 @@ def _handle_json_errors(response):
         json_details["error"] = ("Expecting json result, got %s" % response.text)
 
     status_code = response.status_code
+    url = response.url
     if 400 <= status_code < 500:
         for key in ["error", "message"]:
             if key in json_details:
-                raise GitLabError(status_code, json_details[key])
-        raise GitLabError(status_code, json_details)
+                raise GitLabAPIError(url, status_code, json_details[key])
+        raise GitLabAPIError(url, status_code, json_details)
     if status_code >= 500:
-        raise GitLabError(status_code, response.text)
+        raise GitLabAPIError(url, status_code, response.text)
 
 
 def _handle_stream_errors(response):
     if response.status_code >= 400:
-        raise GitLabError("Incorrect status code:", response.status_code)
+        raise GitLabAPIError(response.url, "Incorrect status code:", response.status_code)
 
 
 class GitLabHelper():
@@ -58,24 +67,29 @@ class GitLabHelper():
         self.token = token
 
     def make_request(self, verb, url, *, data=None, params=None, stream=False):
-        full_url = self.gitlab_api_url + url
-        response = requests.request(verb, full_url,
-                                    headers={"PRIVATE-TOKEN": self.token},
-                                    data=data, params=params, stream=stream)
+        response = self.get_response(verb, url, data=data, params=params, stream=stream)
         handle_errors(response, stream=stream)
         if stream:
             return response
         else:
             return response.json()
 
+    def get_response(self, verb, url, *, data=None, params=None, stream=False):
+        full_url = self.gitlab_api_url + url
+        response = requests.request(verb, full_url,
+                                    headers={"PRIVATE-TOKEN": self.token},
+                                    data=data, params=params, stream=stream)
+        return response
+
     def get_project_id(self, project_name):
         encoded_project_name = urllib.parse.quote(project_name, safe=list())
+        url = "/projects/%s" % encoded_project_name
         try:
-            res = self.make_request("GET", "/projects/%s" % encoded_project_name)
+            res = self.make_request("GET", url)
             return res["id"]
-        except GitLabError as e:
+        except GitLabAPIError as e:
             if e.status_code == 404:
-                raise GitLabError(404, "Project not found: %s" % project_name) from None
+                raise GitLabAPIError(url, 404, "Project not found: %s" % project_name) from None
             else:
                 raise
 
@@ -119,4 +133,17 @@ class GitLabHelper():
         ui.info("done", ui.check)
 
     def get_active_users(self):
-        return self.make_request("GET", "/users", params={"active": "true"})
+        response = self.get_response("GET", "/users", params={"active": "true", "per_page": 100})
+        total = int(response.headers["X-TOTAL"])
+        if total > 100:
+            raise TooManyUsers()
+        else:
+            return response.json()
+
+    def get_group_members(self, group, query=None):
+        return self.make_request("GET", "/groups/%s/members" % group,
+                                 params={"query": query})
+
+    def get_project_members(self, project_id, query=None):
+        return self.make_request("GET", "/projects/%s/members" % project_id,
+                                 params={"query": query})

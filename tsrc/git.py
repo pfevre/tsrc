@@ -5,8 +5,8 @@ import os
 import subprocess
 
 import path
+import ui
 
-from tsrc import ui
 import tsrc
 
 
