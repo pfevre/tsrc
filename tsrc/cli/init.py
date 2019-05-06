@@ -1,17 +1,20 @@
 """ Entry point for `tsrc init` """
+import argparse
 import os
 
-import path
-import ui
+from path import Path
+import cli_ui as ui
 
-import tsrc.workspace
+import tsrc
+import tsrc.workspace.manifest_config
 
 
-def main(args):
+def main(args: argparse.Namespace) -> None:
     workspace_path = args.workspace_path or os.getcwd()
-    workspace = tsrc.workspace.Workspace(path.Path(workspace_path))
-    ui.info_1("Creating new workspace in", ui.bold, workspace_path)
-    workspace.init_manifest(args.manifest_url, branch=args.branch)
+    workspace = tsrc.Workspace(Path(workspace_path))
+    ui.info_1("Configuring workspace in", ui.bold, workspace_path)
+    manifest_config = tsrc.workspace.ManifestConfig.from_args(args)
+    workspace.configure_manifest(manifest_config)
     workspace.load_manifest()
     workspace.clone_missing()
     workspace.set_remotes()

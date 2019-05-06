@@ -1,14 +1,15 @@
 """ Entry point for tsrc log """
 
+import argparse
 import sys
 
-import ui
+import cli_ui as ui
 
+import tsrc
 import tsrc.cli
-import tsrc.git
 
 
-def main(args):
+def main(args: argparse.Namespace) -> None:
     workspace = tsrc.cli.get_workspace(args)
     workspace.load_manifest()
     all_ok = True
@@ -20,7 +21,7 @@ def main(args):
                "--color=always",
                "--pretty=format:%s" % log_format,
                "%s...%s" % (args.from_, args.to)]
-        rc, out = tsrc.git.run_git(full_path, *cmd, raises=False)
+        rc, out = tsrc.git.run_captured(full_path, *cmd, check=False)
         if rc != 0:
             all_ok = False
         if out:

@@ -1,44 +1,39 @@
-""" Entry point for tsrc push """
+""" Common code for push to GitHub or GitLab """
 
+import abc
+import argparse
+import importlib
 import re
+from typing import cast, Iterable, Optional
 
-import ui
+from path import Path
+import cli_ui as ui
 
 import tsrc
-import tsrc.config
-import tsrc.gitlab
 import tsrc.git
-import tsrc.cli
 
 
-WIP_PREFIX = "WIP: "
+def service_from_url(url: str) -> str:
+    """
+    >>> service_from_url("git@github.com:foo/bar")
+    'github'
+    >>> service_from_url("git@gitlab.local:foo/bar")
+    'gitlab'
+
+    """
+    if url.startswith("git@github.com"):
+        return "github"
+    else:
+        return "gitlab"
 
 
-class NoUserMatching(tsrc.Error):
-    def __init__(self, query):
-        self.query = query
-        super().__init__("No user found matching: %s" % self.query)
-
-
-def get_token():
-    config = tsrc.config.parse_tsrc_config()
-    return config["auth"]["gitlab"]["token"]
-
-
-def get_project_name(repo_path):
-    rc, out = tsrc.git.run_git(repo_path, "remote", "get-url", "origin", raises=False)
-    if rc != 0:
-        ui.fatal("Could not get url of 'origin' remote:", out)
-    repo_url = out
-    return project_name_from_url(repo_url)
-
-
-def project_name_from_url(url):
+def project_name_from_url(url: str) -> str:
     """
     >>> project_name_from_url('git@example.com:foo/bar.git')
     'foo/bar'
     >>> project_name_from_url('ssh://git@example.com:8022/foo/bar.git')
     'foo/bar'
+
     """
     # split everthing that is separated by a colon or a slash
     parts = re.split("[:/]", url)
@@ -50,146 +45,108 @@ def project_name_from_url(url):
     return res
 
 
-def select_assignee(choices):
-    return ui.ask_choice("Select an assignee", choices, func_desc=lambda x: x["name"])
+class RepositoryInfo:
+    def __init__(self, working_path: Path = None) -> None:
+        self.project_name = None  # type: Optional[str]
+        self.url = None  # type: Optional[str]
+        self.path = None  # type: Optional[Path]
+        self.current_branch = None  # type: Optional[str]
+        self.service = None  # type: Optional[str]
+        self.tracking_ref = None  # type: Optional[str]
+        self.read_working_path(working_path=working_path)
+
+    def read_working_path(self, working_path: Path = None) -> None:
+        self.path = tsrc.git.get_repo_root(working_path=working_path)
+        self.current_branch = tsrc.git.get_current_branch(self.path)
+        rc, out = tsrc.git.run_captured(self.path, "remote", "get-url", "origin", check=False)
+        if rc == 0:
+            self.url = out
+        if not self.url:
+            return
+        self.tracking_ref = tsrc.git.get_tracking_ref(self.path)
+        self.project_name = project_name_from_url(self.url)
+        self.service = service_from_url(self.url)
 
 
-def wipify(title):
-    if not title.startswith(WIP_PREFIX):
-        return WIP_PREFIX + title
-
-
-def unwipify(title):
-    if title.startswith(WIP_PREFIX):
-        return title[len(WIP_PREFIX):]
-
-
-class PushAction():
-    def __init__(self, args, gl_helper=None):
+class PushAction(metaclass=abc.ABCMeta):
+    def __init__(self, repository_info: RepositoryInfo, args: argparse.Namespace) -> None:
         self.args = args
-        self.gl_helper = gl_helper
-        self.source_branch = None
-        self.target_branch = None
-        self.project_id = None
-        self.project_name = None
-        self.repo_path = None
-        self.source_branch = None
-        self.target_branch = None
+        self.repository_info = repository_info
 
-    def main(self):
-        self.prepare()
-        self.push()
-        self.handle_merge_request()
+    @property
+    def repo_path(self) -> Path:
+        return self.repository_info.path
 
-    def prepare(self):
-        if not self.gl_helper:
-            workspace = tsrc.cli.get_workspace(self.args)
-            workspace.load_manifest()
-            gitlab_url = workspace.get_gitlab_url()
-            token = get_token()
-            self.gl_helper = tsrc.gitlab.GitLabHelper(gitlab_url, token)
+    @property
+    def tracking_ref(self) -> Optional[str]:
+        return self.repository_info.tracking_ref
 
-        self.repo_path = tsrc.git.get_repo_root()
-        self.project_name = get_project_name(self.repo_path)
-        self.project_id = self.gl_helper.get_project_id(self.project_name)
+    @property
+    def remote_name(self) -> Optional[str]:
+        if not self.tracking_ref:
+            return None
+        return self.tracking_ref.split("/", maxsplit=1)[0]
 
-        current_branch = tsrc.git.get_current_branch(self.repo_path)
-        self.source_branch = current_branch
-        self.target_branch = self.args.target_branch
+    @property
+    def current_branch(self) -> Optional[str]:
+        return self.repository_info.current_branch
 
-    def push(self):
+    @property
+    def remote_branch(self) -> Optional[str]:
+        if not self.tracking_ref:
+            return self.current_branch
+        else:
+            return self.tracking_ref.split("/", maxsplit=1)[1]
+
+    @property
+    def requested_target_branch(self) -> Optional[str]:
+        return cast(Optional[str], self.args.target_branch)
+
+    @property
+    def requested_title(self) -> Optional[str]:
+        return cast(Optional[str], self.args.title)
+
+    @property
+    def requested_reviewers(self) -> Iterable[str]:
+        return cast(Iterable[str], self.args.reviewers)
+
+    @property
+    def requested_assignee(self) -> Optional[str]:
+        return cast(Optional[str], self.args.assignee)
+
+    @property
+    def project_name(self) -> Optional[str]:
+        return self.repository_info.project_name
+
+    @abc.abstractmethod
+    def setup_service(self) -> None:
+        pass
+
+    @abc.abstractmethod
+    def post_push(self) -> None:
+        pass
+
+    def push(self) -> None:
         ui.info_2("Running git push")
-        cmd = ["push", "-u", "origin", "%s:%s" % (self.source_branch, self.source_branch)]
+        remote_name = self.remote_name or "origin"
+        if self.args.push_spec:
+            push_spec = self.args.push_spec
+        else:
+            push_spec = "%s:%s" % (self.current_branch, self.remote_branch)
+        cmd = ["push", "-u", remote_name, push_spec]
         if self.args.force:
             cmd.append("--force")
-        tsrc.git.run_git(self.repo_path, *cmd)
+        tsrc.git.run(self.repo_path, *cmd)
 
-    def handle_assignee(self):
-        if not self.args.assignee:
-            return None
-        return self.find_assigne(self.args.assignee)
-
-    def get_review_candidates(self, query):
-        group_name = self.project_name.split("/")[0]
-        project_members = self.gl_helper.get_project_members(self.project_id, query=query)
-        group_members = self.gl_helper.get_group_members(group_name, query=query)
-        # Concatenate and de-duplicate results:
-        candidates = project_members + group_members
-        res = list()
-        seen = set()
-        for user in candidates:
-            user_name = user["name"]
-            if user_name not in seen:
-                seen.add(user_name)
-                res.append(user)
-        return res
-
-    def find_assigne(self, query):
-        candidates = self.get_review_candidates(query=query)
-        if not candidates:
-            raise NoUserMatching(query)
-        if len(candidates) == 1:
-            return candidates[0]
-        return select_assignee(candidates)
-
-    def handle_merge_request(self):
-        assignee = self.handle_assignee()
-        if assignee:
-            ui.info_2("Assigning to", assignee["name"])
-
-        merge_request = self.ensure_merge_request()
-
-        title = self.handle_title(merge_request)
-
-        params = {
-            "title": title,
-            "target_branch": self.target_branch,
-            "remove_source_branch": True,
-        }
-        if assignee:
-            params["assignee_id"] = assignee["id"]
-
-        self.gl_helper.update_merge_request(merge_request, **params)
-
-        if self.args.accept:
-            self.gl_helper.accept_merge_request(merge_request)
-
-        ui.info(ui.green, "::",
-                ui.reset, "See merge request at", merge_request["web_url"])
-
-    def handle_title(self, merge_request):
-        # If set from command line: use it
-        if self.args.mr_title:
-            return self.args.mr_title
-        else:
-            # Change the title if we need to
-            title = merge_request["title"]
-            if self.args.ready:
-                return unwipify(title)
-            if self.args.wip:
-                return wipify(title)
-
-    def find_merge_request(self):
-        return self.gl_helper.find_opened_merge_request(
-            self.project_id, self.source_branch
-        )
-
-    def create_merge_request(self):
-        return self.gl_helper.create_merge_request(
-            self.project_id, self.source_branch,
-            title=self.source_branch,
-            target_branch=self.target_branch
-        )
-
-    def ensure_merge_request(self):
-        merge_request = self.find_merge_request()
-        if merge_request:
-            ui.info_2("Found existing merge request: !%s" % merge_request["iid"])
-            return merge_request
-        else:
-            return self.create_merge_request()
+    def execute(self) -> None:
+        self.setup_service()
+        self.push()
+        self.post_push()
 
 
-def main(args):
-    push_action = PushAction(args)
-    push_action.main()
+def main(args: argparse.Namespace) -> None:
+    repository_info = RepositoryInfo()
+    service_name = repository_info.service
+    module = importlib.import_module("tsrc.cli.push_%s" % service_name)
+    push_action = module.PushAction(repository_info, args)  # type: ignore
+    push_action.execute()

@@ -1,44 +1,52 @@
 """ Helpers to run things on multiple repos and collect errors """
 
 import abc
+import sys
+from typing import Any, Generic, List, Tuple, TypeVar  # noqa
 
-import ui
+import cli_ui as ui
 
 import tsrc
+
+
+T = TypeVar('T')
 
 
 class ExecutorFailed(tsrc.Error):
     pass
 
 
-class Task(metaclass=abc.ABCMeta):
-
-    @abc.abstractmethod
-    def description(self) -> str:
+class Task(Generic[T], metaclass=abc.ABCMeta):
+    def on_start(self, *, num_items: int) -> None:
         pass
 
-    # pylint: disable=no-self-use
-    def quiet(self):
+    def on_failure(self, *, num_errors: int) -> None:
+        pass
+
+    def on_success(self) -> None:
+        pass
+
+    def quiet(self) -> bool:
         return False
 
     @abc.abstractmethod
-    def display_item(self, _) -> str:
+    def display_item(self, item: T) -> str:
         pass
 
     @abc.abstractmethod
-    def process(self, _):
+    def process(self, item: T) -> None:
         pass
 
 
-class SequentialExecutor():
-    def __init__(self, task):
+class SequentialExecutor(Generic[T]):
+    def __init__(self, task: Task[T]) -> None:
         self.task = task
-        self.errors = list()
+        self.errors = list()  # type: List[Tuple[T, tsrc.Error]]
 
-    def process(self, items):
+    def process(self, items: List[T]) -> None:
         if not items:
-            return True
-        ui.info_1(self.task.description())
+            return
+        self.task.on_start(num_items=len(items))
 
         self.errors = list()
         num_items = len(items)
@@ -49,24 +57,26 @@ class SequentialExecutor():
 
         if self.errors:
             self.handle_errors()
+        else:
+            self.task.on_success()
 
-    def handle_errors(self):
-        ui.error(self.task.description(), "failed")
+    def handle_errors(self) -> None:
+        self.task.on_failure(num_errors=len(self.errors))
         for item, error in self.errors:
             item_desc = self.task.display_item(item)
             message = [ui.green, "*", " ", ui.reset, ui.bold, item_desc]
             if error.message:
                 message.extend([ui.reset, ": ", error.message])
-            ui.info(*message, sep="")
+            ui.info(*message, sep="", fileobj=sys.stderr)
         raise ExecutorFailed()
 
-    def process_one(self, item):
+    def process_one(self, item: T) -> None:
         try:
             self.task.process(item)
         except tsrc.Error as error:
             self.errors.append((item, error))
 
 
-def run_sequence(items, task):
+def run_sequence(items: List[T], task: Task[Any]) -> None:
     executor = SequentialExecutor(task)
     return executor.process(items)

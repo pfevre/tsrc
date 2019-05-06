@@ -10,37 +10,55 @@ def get_long_description():
         return fp.read()
 
 
-setup(name="tsrc",
-      version="0.2.4",
-      description="Manage multiple repositories",
-      long_description=get_long_description(),
-      url="https://github.com/TankerApp/tsrc",
-      author="Kontrol SAS",
-      packages=find_packages(),
-      include_package_data=True,
-      install_requires=[
+setup(
+    name="tsrc",
+    version="0.6.6",
+    description="Manage multiple repositories",
+    long_description=get_long_description(),
+    url="https://github.com/TankerHQ/tsrc",
+    author="Kontrol SAS",
+    packages=find_packages(),
+    include_package_data=True,
+    install_requires=[
         "attrs",
-        "colored_traceback",
+        "cli-ui>=0.9.1",
         "colorama",
+        "colored_traceback",
+        "github3.py >= 1.0",
         "path.py",
-        "python-cli-ui",
         "pyparsing",
+        "python-gitlab",
         "requests",
         "ruamel.yaml",
         "schema",
         "tabulate",
         "unidecode",
         "xdg",
-      ],
-      classifiers=[
-        "Programming Language :: Python :: 3.3",
-        "Programming Language :: Python :: 3.4",
+    ],
+    extras_require={
+        "dev": [
+            "codecov==2.0.15",
+            "coverage==4.5.1",
+            "pluggy==0.7.1",
+            "pytest==3.8.1",
+            "pytest-cov==2.6.0",
+            "pytest-sugar==0.9.1",
+            "pytest-xdist==1.23.2",
+            "requests",
+            "mock",
+            "mypy==0.700",
+            "twine",
+            "wheel",
+            "flake8==3.5.0",
+            "flake8-comprehensions",
+            "mkdocs",
+        ]
+
+    },
+    classifiers=[
         "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
-      ],
-      entry_points={
-        "console_scripts": [
-          "tsrc = tsrc.cli.main:main",
-         ]
-      }
-      )
+        "Programming Language :: Python :: 3.7",
+    ],
+    entry_points={"console_scripts": ["tsrc = tsrc.cli.main:main"]},
+)

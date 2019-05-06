@@ -1,12 +1,26 @@
 """ Repo value object """
 
 import attr
+from typing import Optional, List  # noqa
 
 
-# pylint: disable=too-few-public-methods
-@attr.s
+@attr.s(frozen=True)
+class Remote:
+    name = attr.ib()  # type: str
+    url = attr.ib()   # type: str
+
+
+@attr.s(frozen=True)
 class Repo():
-    src = attr.ib()
-    url = attr.ib()
-    branch = attr.ib(default="master")
-    fixed_ref = attr.ib(default=None)
+    src = attr.ib()  # type: str
+    branch = attr.ib(default="master")  # type: Optional[str]
+    sha1 = attr.ib(default=None)  # type: Optional[str]
+    tag = attr.ib(default=None)   # type: Optional[str]
+    shallow = attr.ib(default=None)  # type: Optional[bool]
+
+    remotes = attr.ib(default=list())  # type: List[Remote]
+
+    @property
+    def clone_url(self) -> str:
+        assert self.remotes
+        return self.remotes[0].url

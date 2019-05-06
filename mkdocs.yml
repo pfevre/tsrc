@@ -1,6 +1,9 @@
-site_name: Tanker documentation
-theme: readthedocs
-theme_dir: custom_theme
+site_name: tsrc documentation
+
+theme:
+  name: readthedocs
+  custom_dir: custom_theme
+
 extra_css: [extra.css]
 strict: true
 
@@ -12,12 +15,12 @@ markdown_extensions:
       permalink: True
       separator: "_"
 
-pages:
+nav:
 - Home: index.md
 
 - Getting started:
   - Basic usage: guide/basics.md
-  - Handling GitLab merge requests: guide/merge_requests.md
+  - Automating code review: guide/review.md
 
 
 - Reference:
@@ -25,6 +28,8 @@ pages:
   - Configuration files formats: ref/formats.md
 
 - Contributing: contrib.md
+
+- Code manifesto: code-manifesto.md
 
 - FAQ: faq.md
 

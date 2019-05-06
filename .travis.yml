@@ -1,16 +1,20 @@
 language: python
-python:
-  - "3.3"
-  - "3.4"
-  - "3.5"
-  - "3.6"
+sudo: false
+
+matrix:
+  include:
+    - python: "3.5"
+    - python: "3.6"
+    - python: "3.7"
+      dist: xenial
+      sudo: true
 
 install:
-  - pip install .
-  - pip install -r dev-requirements.txt
-  - pip install -r doc-requirements.txt
+  - curl -L https://github.com/TankerHQ/dmenv/releases/download/v0.5.0/dmenv-linux -o dmenv
+  - chmod u+x dmenv
+  - ./dmenv install
+
 
 script:
-  - ci/lint.sh
-  - pytest --cov . --cov-report term
-  - mkdocs build
+  - ./dmenv run -- python ci/ci.py
+  - ./dmenv run codecov

@@ -1,42 +1,59 @@
 """ Parse tsrc config files """
 
-import path
+from path import Path
 import ruamel.yaml
 import schema
+from typing import Any, Dict, NewType
 import xdg
 
 import tsrc
 
+Config = NewType('Config', Dict[str, Any])
 
-def parse_config_file(file_path, config_schema):
+
+def parse_config(file_path: Path, config_schema: schema.Schema, roundtrip: bool = False) -> Config:
     try:
         contents = file_path.text()
     except OSError as os_error:
-        raise tsrc.InvalidConfig(file_path, "Could not read file: %s" % str(os_error))
+        raise tsrc.InvalidConfig(file_path, os_error)
     try:
-        parsed = ruamel.yaml.safe_load(contents)
+        if roundtrip:
+            yaml = ruamel.yaml.YAML(typ="rt")
+        else:
+            yaml = ruamel.yaml.YAML(typ="safe", pure=True)
+        parsed = yaml.load(contents)
     except ruamel.yaml.error.YAMLError as yaml_error:
-        # pylint: disable=no-member
-        context = "(ligne %s, col %s) " % (
-            yaml_error.context_mark.line,
-            yaml_error.context_mark.column
-        )
-        message = "%s - YAML error: %s" % (context, yaml_error.context)
-        raise tsrc.InvalidConfig(file_path, message)
+        raise tsrc.InvalidConfig(file_path, yaml_error)
     try:
-        return config_schema.validate(parsed)
+        config_schema.validate(parsed)
     except schema.SchemaError as schema_error:
-        raise tsrc.InvalidConfig(file_path, str(schema_error))
+        raise tsrc.InvalidConfig(file_path, schema_error)
+    return Config(parsed)
 
 
-def parse_tsrc_config(config_path=None):
+def dump_config(config: Config, path: Path) -> None:
+    yaml = ruamel.yaml.YAML()
+    with path.open("w") as fileobj:
+        yaml.dump(config, fileobj)
+
+
+def get_tsrc_config_path() -> Path:
+    config_path = Path(xdg.XDG_CONFIG_HOME)
+    config_path = config_path / "tsrc.yml"
+    return config_path
+
+
+def dump_tsrc_config(config: Config) -> None:
+    file_path = get_tsrc_config_path()
+    dump_config(config, file_path)
+
+
+def parse_tsrc_config(config_path: Path = None, roundtrip: bool = False) -> Config:
     auth_schema = {
-        "gitlab": {
-            "token": str
-        }
+        schema.Optional("gitlab"): {"token": str},
+        schema.Optional("github"): {"token": str},
     }
     tsrc_schema = schema.Schema({"auth": auth_schema})
     if not config_path:
-        config_path = path.Path(xdg.XDG_CONFIG_HOME)
-        config_path = config_path.joinpath("tsrc.yml")
-    return parse_config_file(config_path, tsrc_schema)
+        config_path = get_tsrc_config_path()
+    return parse_config(config_path, tsrc_schema, roundtrip=roundtrip)
